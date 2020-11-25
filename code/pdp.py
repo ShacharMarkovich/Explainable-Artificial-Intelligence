@@ -1,6 +1,8 @@
+import threading
+import os
 import time
 from math import *
-from typing import Union, Callable
+from typing import Union, Callable, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,6 +11,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import SelectKBest
 from sklearn.inspection import partial_dependence
 from sklearn.inspection import plot_partial_dependence
+
+K = 6
 
 
 # region Private
@@ -123,7 +127,7 @@ def plot_bar_chart(x, y, features: Union[int, str, list],
             fig.legend(handles, labels, loc='upper right', prop={'size': 10})
 
 
-def calc_measures(classifier, data_set, target) -> tuple:
+def calc_measures(classifier, data_set, target) -> Tuple[float, float, float, float]:
     """
     Helping function - gives an indicate about how much our calculations are accurate.
 
@@ -146,25 +150,25 @@ def calc_measures(classifier, data_set, target) -> tuple:
     return accuracy, precision, recall, f1
 
 
-def slope_rank(classifier, X, k: Union[str, int] = 'all', score=False) -> Union[tuple, list]:
+def slope_rank(classifier, given_x, k: Union[str, int] = 'all', score=False) -> Union[tuple, list]:
     """
     select and return the `k` best features, according to the slop rank
 
     :param classifier: a classifier function
-    :param X: the input data (names and values)
-    :type X: pandas.core.frame.DataFrame
+    :param given_x: the input data (names and values)
+    :type given_x: pandas.core.frame.DataFrame
     :param k: amount of features to select. `all` means - select all features
     :param score: flag, indicate if to return the score of each value
     :return:
     """
     scores = []
-    for feature in list(X):
+    for feature in list(given_x):
         x, y = None, None
         try:
-            y, x = partial_dependence(classifier, X, feature)
+            y, x = partial_dependence(classifier, given_x, feature)
         except ValueError:
             # in the case that the slop too flat - it solve it
-            y, x = partial_dependence(classifier, X, feature, percentiles=(0, 1))
+            y, x = partial_dependence(classifier, given_x, feature, percentiles=(0, 1))
         finally:
             # calc tha slop and add it to the scores
             if x is None or y is None:
@@ -174,7 +178,7 @@ def slope_rank(classifier, X, k: Union[str, int] = 'all', score=False) -> Union[
             line = np.polyfit(x, y, 1)
             scores.append(abs(line[0]))
 
-    names = list(X)
+    names = list(given_x)
     if k != 'all':
         # if user didn't select all of them - select the `k` best of them:
         ind = np.argpartition(scores, -k)[-k:]
@@ -200,10 +204,10 @@ def plot_feature_importance(x, y, score_func=None, classifier=None):
 
     """
     # get the score and name of each feature, according to the classifier and/or score function:
-    if classifier is not None:
+    if classifier is not None:  # features' value are numeric
         names, scores = select_k_best(x, y, classifier=classifier, score=True)
         res = [scores, names]
-    else:
+    else:  # features' value are range
         names, scores = select_k_best(x, y, score_func=score_func, score=True)
         # associates between features name to there score:
         pairs = list(zip(scores, names))
@@ -264,22 +268,24 @@ def select_k_best(x, y, score_func=None, k: Union[int, str] = 'all',
         return names
 
 
-def pdp(classifier, X, features: list, slope=True):
+def pdp(classifier, given_x, features: list, slope=True, fig_name: str = ""):
     """
     Show the pdp plot and calculate the slope of each variable
 
+    :param fig_name: the output figure title
     :param classifier: a classifier function
-    :param X: the input data (names and values)
-    :type X: pandas.core.frame.DataFrame
+    :param given_x: the input data (names and values)
+    :type given_x: pandas.core.frame.DataFrame
     :param features: list of features
     :param slope: flag, indicate if we want to get the slope of each variable
     """
     if not slope:
-        plot_partial_dependence(classifier, X, features)
+        plot_partial_dependence(classifier, given_x, features)
         return  # if we dont need to calc the slop - not need anymore this function!
 
     # create new figure
     fig = plt.figure()
+    fig.suptitle(fig_name, fontsize=16)
     subplots_num = len(features)
     cols = ceil(sqrt(subplots_num))
     rows = subplots_num // cols + int(bool(subplots_num % cols))
@@ -294,13 +300,14 @@ def pdp(classifier, X, features: list, slope=True):
         :return: a new subplot
         """
         ax = fig.add_subplot(rows, cols, index + 1, sharey=sharey)
-        y, x = partial_dependence(classifier, X, features[index])
+        y, x = partial_dependence(classifier, given_x, features[index])
         x, y = x[0], y[0]
-        slope, intercept = np.polyfit(x, y, 1)
-        ax.title.set_text(features[index] + (', slope = %.4f' % slope))
+        # noinspection PyTupleAssignmentBalance
+        the_slope, intercept = np.polyfit(x, y, 1)
+        ax.title.set_text(features[index] + (', slope = %.4f' % the_slope))
         ax.plot(x, y)
         slx = np.linspace(min(x), max(x))
-        sly = slope * slx + intercept
+        sly = the_slope * slx + intercept
         ax.plot(slx, sly)
         ax.plot(x, y)
         return ax
@@ -310,19 +317,78 @@ def pdp(classifier, X, features: list, slope=True):
     for i in range(len(features) - 1):
         subplot(i + 1, ax1)
 
+    fig.savefig(f"{fig_name}.png", dpi=300)
+
 
 # endregion
+problems = {}
+
+
+def explain(files_list: list):
+    for file in files_list:
+        data1 = pd.read_csv(f"../data_bases/numeric/{file}")  # numeric value in each cell
+        try:
+            x = data1.drop(labels=['class'], axis=1)
+            y = data1['class']
+        except KeyError:
+            x = data1.drop(labels=['Class'], axis=1)
+            y = data1['Class']
+
+        clf = RandomForestClassifier(n_estimators=100)
+        clf.fit(x, y)
+        try:
+            best_slope = slope_rank(clf, x, K, True)
+            print(f"finish slope_rank file {file}")
+            best_forest = select_k_best(x, y, classifier=clf, k=K)
+            print(f"finish select_k_best file {file}")
+
+            pdp(clf, x, best_slope, fig_name=f"{file}: best slopes")
+            print(f"finish best_slope {file}")
+            pdp(clf, x, best_forest, fig_name=f"{file}: best random forest classifier")
+            print(f"finish with {file}")
+        except Exception as error:
+            problems[file] = [type(error), error]
+
+
+def run_all_files():
+    # get all files' name in db:
+    print("execute numeric dbs, it's gonna take a while... ")
+    files_name = os.listdir("../data_bases/numeric")
+    fs1, fs2 = files_name[::2], files_name[1::2]
+    f1, f2 = fs1[::2], fs1[1::2]
+    f3, f4 = fs2[::2], fs2[1::2]
+
+    t1 = threading.Thread(target=explain, args=(f1,))
+    t2 = threading.Thread(target=explain, args=(f2,))
+    t3 = threading.Thread(target=explain, args=(f3,))
+    t4 = threading.Thread(target=explain, args=(f4,))
+
+    t1.start()
+    t2.start()
+    t3.start()
+    t4.start()
+
+    t1.join()
+    t2.join()
+    t3.join()
+    t4.join()
+    print("\n\nthe maniac are:\n", problems)
+    with open("problems.txt", "w") as problem_files:
+        for file_name, val in problems.items():
+            problem_files.write(f"In `{file_name}`:\n")
+            problem_files.write(f"{str(val[0])}\n")
+            problem_files.write(f"{str(val[1])}\n\n\n")
 
 
 def todo_split_it_to_what_you_need_to_split_to():
     # region Data Initializing
     start = time.time()
-    data1 = pd.read_csv("spam.csv")  # numeric value in each cell
-    X1 = data1.drop(labels=['class'], axis=1)
+    data1 = pd.read_csv("../data_bases/numeric/spam.csv")  # numeric value in each cell
+    x1 = data1.drop(labels=['class'], axis=1)
     y1 = data1['class']
 
-    data2 = pd.read_csv("spam-1.csv")  # range value in each cell
-    X2 = data2.drop(labels=['class', 'Selected'], axis=1)
+    data2 = pd.read_csv("../data_bases/ranges/spam-1.csv")  # range value in each cell
+    x2 = data2.drop(labels=['class', 'Selected'], axis=1)
     y2 = data2['class']
     # endregion
 
@@ -330,53 +396,54 @@ def todo_split_it_to_what_you_need_to_split_to():
 
     # Classifier Initialization:
     clf = RandomForestClassifier(n_estimators=100)
-    clf.fit(X1, y1)
+    clf.fit(x1, y1)
 
     # print(sorted(clf.feature_importances_))
-    # print(list(X1))
+    # print(list(x1))
     # Selector Initialization:
     # selector = SelectKBest(mutual_info_classif, k=6)
-    # selector.fit(X1, y1)
+    # selector.fit(x1, y1)
 
     # Measurements for Selected Classifier:
-    # print("\nMeasures:\n accuracy = %.4f\n precision = %.4f\n recall = %.4f\n f1 = %.4f" % calc_measures(clf, X1, y1))
-    # print(slope_rank(clf, X1, k=6, score=True))
-    # plot_partial_dependence(clf, X1, ['word_freq_edu', 'word_freq_meeting', 'char_freq_!', 'word_freq_000',
+    # print("\nMeasures:\n accuracy = %.4f\n precision = %.4f\n recall = %.4f\n f1 = %.4f" % calc_measures(clf, x1, y1))
+    # print(slope_rank(clf, x1, k=6, score=True))
+    # plot_partial_dependence(clf, x1, ['word_freq_edu', 'word_freq_meeting', 'char_freq_!', 'word_freq_000',
     #               'char_freq_$', 'word_freq_remove'])
     # print(line)
     # Plot Feature Importance for Categorical or Continuous Data
-    # plot_feature_importance(X1, y1, classifier=clf)
-    # plot_feature_importance(X2, y2, mutual_info_classif)
+    # plot_feature_importance(x1, y1, classifier=clf)
+    # plot_feature_importance(x2, y2, mutual_info_classif)
 
     # Professor, we save you the time to run the code yourself and tell you that those are the most influential words:)
     best_slope = ['word_freq_edu', 'word_freq_meeting', 'char_freq_!', 'word_freq_000', 'char_freq_$',
                   'word_freq_remove']
-    best_forest = select_k_best(X1, y1, classifier=clf, k=6)
-    pdp(clf, X1, best_slope)
-    pdp(clf, X1, best_forest)
+    best_forest = select_k_best(x1, y1, classifier=clf, k=6)
+    pdp(clf, x1, best_slope, fig_name="best features by slopes")
+    pdp(clf, x1, best_forest, fig_name="best features by Random Forest Classifier")
 
     # Get K Best Features Names for Categorical or Continuous Data
-    # plot_features = select_k_best(X1, y1, classifier=clf, k=6)
+    # plot_features = select_k_best(x1, y1, classifier=clf, k=6)
     # print(plot_features)
-    # plot_features = select_k_best(X2, y2, mutual_info_classif, 4)
+    # plot_features = select_k_best(x2, y2, mutual_info_classif, 4)
 
     # Get K Best Features Names & Scores for Categorical or Continuous Data
-    # names, scores = select_k_best(X1, y1, mutual_info_classif, 6, True)
-    # names, scores = select_k_best(X2, y2, mutual_info_classif, 6, True)
+    # names, scores = select_k_best(x1, y1, mutual_info_classif, 6, True)
+    # names, scores = select_k_best(x2, y2, mutual_info_classif, 6, True)
 
     # PDP for Continuous Data only
-    # plot_partial_dependence(clf, X1, [0, 1, 2, 3])
-    # pdp(clf, X1, plot_features)
+    # plot_partial_dependence(clf, x1, [0, 1, 2, 3])
+    # pdp(clf, x1, plot_features)
     # print(x[0])
     # print(y[0])
-    # print(partial_dependence(clf, X1, ['word_freq_address']))
+    # print(partial_dependence(clf, x1, ['word_freq_address']))
     # Plot Bar Chart for Categorical Data only
-    # plot_bar_chart(X2, y2, plot_features)
-    # slopes, features = slope_rank(clf, X1)
+    # plot_bar_chart(x2, y2, plot_features)
+    # slopes, features = slope_rank(clf, x1)
     # pd.DataFrame(slopes, features).plot.barh()
     print("\nTime Elapsed: %.4f seconds." % (time.time() - start))
     plt.show()
 
 
 if __name__ == "__main__":
-    todo_split_it_to_what_you_need_to_split_to()
+    # todo_split_it_to_what_you_need_to_split_to()
+    run_all_files()
