@@ -31,7 +31,7 @@ def __plot_bar_chart(x, y, feature: Union[int, str], axis=None,
     :param sort_cat:
     :return:
     """
-    if isinstance(ifeature, int):
+    if isinstance(feature, int):
         feature = list(x)[feature]
     col = x[feature]
     classes = list(dict.fromkeys(y))
