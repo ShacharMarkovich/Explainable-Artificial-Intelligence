@@ -1,5 +1,5 @@
-import threading
 import os
+import threading
 import time
 from math import *
 from typing import Union, Callable, Tuple
@@ -326,6 +326,7 @@ problems = {}
 
 def explain(files_list: list):
     for file in files_list:
+
         data1 = pd.read_csv(f"../data_bases/numeric/{file}")  # numeric value in each cell
         try:
             x = data1.drop(labels=['class'], axis=1)
@@ -350,10 +351,38 @@ def explain(files_list: list):
             problems[file] = [type(error), error]
 
 
+def explain1():
+    file = "sonar"
+    data1 = pd.read_csv("../data_bases/numeric/sonar.csv")  # numeric value in each cell
+    try:
+        x = data1.drop(labels=['class'], axis=1)
+        y = data1['class']
+    except KeyError:
+        x = data1.drop(labels=['Class'], axis=1)
+        y = data1['Class']
+
+    clf = RandomForestClassifier(n_estimators=100)
+    clf.fit(x, y)
+    try:
+        best_slope = slope_rank(clf, x, K, True)
+        print(f"finish slope_rank file {file}")
+        best_forest = select_k_best(x, y, classifier=clf, k=K)
+        print(f"finish select_k_best file {file}")
+
+        pdp(clf, x, best_slope, fig_name=f"{file}: best slopes")
+        print(f"finish best_slope {file}")
+        pdp(clf, x, best_forest, fig_name=f"{file}: best random forest classifier")
+        print(f"finish with {file}")
+    except Exception as error:
+        print(error)
+        # problems[file] = [type(error), error]
+
+
 def run_all_files():
     # get all files' name in db:
     print("execute numeric dbs, it's gonna take a while... ")
     files_name = os.listdir("../data_bases/numeric")
+    print(files_name)
     fs1, fs2 = files_name[::2], files_name[1::2]
     f1, f2 = fs1[::2], fs1[1::2]
     f3, f4 = fs2[::2], fs2[1::2]
@@ -362,6 +391,7 @@ def run_all_files():
     t2 = threading.Thread(target=explain, args=(f2,))
     t3 = threading.Thread(target=explain, args=(f3,))
     t4 = threading.Thread(target=explain, args=(f4,))
+    data1 = pd.read_csv("../data_bases/numeric/spam.csv")  # numeric value in each cell
 
     t1.start()
     t2.start()
@@ -446,4 +476,5 @@ def todo_split_it_to_what_you_need_to_split_to():
 
 if __name__ == "__main__":
     # todo_split_it_to_what_you_need_to_split_to()
-    run_all_files()
+    # run_all_files()
+    explain1()
