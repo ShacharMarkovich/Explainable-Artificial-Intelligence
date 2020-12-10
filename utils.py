@@ -91,7 +91,7 @@ def calc_measures(classifier, data_set, target):
     :return: 4 accurate measures
     """
     from sklearn.model_selection import cross_validate
-    scoring = ['accuracy', 'precision_weighted', 'recall_weighted', 'f1']
+    scoring = ['accuracy', 'precision_weighted', 'recall_weighted', 'f1_weighted']
     result = cross_validate(classifier, data_set, target, scoring=scoring, cv=10)
     result = [result['test_' + score].mean() for score in scoring]
     scoring = [score.split('_')[0].title() for score in scoring]
