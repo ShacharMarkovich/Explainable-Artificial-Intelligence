@@ -2,7 +2,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier  # gini
 from utils import get_data, ProgressBar, calc_measures
-from feature_selection import select_k_best
+from feature_selection import __select_k_best
 from sklearn.feature_selection import mutual_info_classif, chi2
 from sklearn.model_selection import train_test_split
 

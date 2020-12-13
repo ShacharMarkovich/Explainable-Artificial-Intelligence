@@ -1,10 +1,44 @@
-import numpy as np
-from typing import Union
-from sklearn.feature_selection import SelectKBest
+"""
+DO NOT IMPORT ANYTHING GLOBALLY.
+DO NOT DECLARE ANY GLOBAL VARIABLE, UNLESS IT STARTS WITH '__'
+ANY FUNCTION WITHOUT THIS SIGNATURE:
+def <name>(x, y, k, score) -> Tuple[list, list] (returns (names, scores) when score=True),
+SHOULD BE PRIVATE (starts with '__'), OR SHOULD BE DECLARED INSIDE ANOTHER FUNCTION.
+"""
 
 
-def select_k_best(x, y, score_func=None, k: Union[int, str] = 'all',
-                  classifier=None, score=False) -> Union[tuple, list]:
+def slope_rank(x, y, k='all', score=False):
+    from sklearn.ensemble import RandomForestClassifier
+    clf = RandomForestClassifier(n_estimators=100)
+    clf.fit(x, y)
+    return __slope_rank(clf, x, k, score)
+
+
+def info_gain(x, y, k='all', score=False):
+    from sklearn.feature_selection import mutual_info_classif
+    return __select_k_best(x, y, mutual_info_classif, k, score=score)
+
+
+def chi2(x, y, k='all', score=False):
+    from sklearn.feature_selection import chi2 as chisq
+    return __select_k_best(x, y, chisq, k, score=score)
+
+
+def gini(x, y, k='all', score=False):
+    from sklearn.tree import DecisionTreeClassifier
+    clf = DecisionTreeClassifier(criterion='gini')
+    return __select_k_best(x, y, classifier=clf, k=k, score=score)
+
+
+def random_forest(x, y, k='all', score=False):
+    from sklearn.ensemble import RandomForestClassifier
+    clf = RandomForestClassifier(n_estimators=100)
+    clf.fit(x, y)
+    return __select_k_best(x, y, classifier=clf, k=k, score=score)
+
+
+def __select_k_best(x, y, score_func=None, k='all',
+                    classifier=None, score=False):
     """
     select the `k` best features, using a classifier object or score function.
 
@@ -18,9 +52,11 @@ def select_k_best(x, y, score_func=None, k: Union[int, str] = 'all',
     :param score: flag, indicate if to return the score of each value
     :return:  k best features' names list. optional: score of each value
     """
+    import numpy as np
     if classifier is not None:
         fs = classifier
     else:
+        from sklearn.feature_selection import SelectKBest
         fs = SelectKBest(score_func, k=k)
 
     try:
@@ -54,7 +90,7 @@ def select_k_best(x, y, score_func=None, k: Union[int, str] = 'all',
         return names
 
 
-def slope_rank(classifier, given_x, k: Union[str, int] = 'all', score=False) -> Union[tuple, list]:
+def __slope_rank(classifier, given_x, k='all', score=False):
     """
     select and return the `k` best features, according to the slop rank
 
@@ -66,10 +102,9 @@ def slope_rank(classifier, given_x, k: Union[str, int] = 'all', score=False) -> 
     :return:
     """
     from sklearn.inspection import partial_dependence
-    from utils import ProgressBar
+    import numpy as np
     scores = []
     features = list(given_x)
-    bar = ProgressBar(len(features), 'Calculating: ', 'Completed')
     for feature in features:
         x, y = None, None
         try:
@@ -85,8 +120,6 @@ def slope_rank(classifier, given_x, k: Union[str, int] = 'all', score=False) -> 
             x, y = x[0], y[0]
             line = np.polyfit(x, y, 1)
             scores.append(abs(line[0]))
-            bar.increment()
-    del bar
     names = list(given_x)
     if k != 'all':
         # if user didn't select all of them - select the `k` best of them:

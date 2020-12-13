@@ -165,13 +165,13 @@ def plot_feature_importance(x, y, score_func=None, classifier=None):
     :param classifier: a classifier function
 
     """
-    from feature_selection import select_k_best
+    from feature_selection import __select_k_best
     # get the score and name of each feature, according to the classifier and/or score function:
     if classifier is not None:  # features' value are numeric
-        names, scores = select_k_best(x, y, classifier=classifier, score=True)
+        names, scores = __select_k_best(x, y, classifier=classifier, score=True)
         res = [scores, names]
     else:  # features' value are range
-        names, scores = select_k_best(x, y, score_func=score_func, score=True)
+        names, scores = __select_k_best(x, y, score_func=score_func, score=True)
         # associates between features name to there score:
         pairs = list(zip(scores, names))
         pairs.sort(key=lambda p: p[0])
