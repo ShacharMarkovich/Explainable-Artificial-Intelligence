@@ -12,7 +12,7 @@ class ProgressBar:
         self.print_bar()
 
     def get_bar(self):
-        percent = "{0:.1f}".format(self.length * (self.iteration / float(self.total)))
+        percent = "{0:.1f}".format(100 * (self.iteration / float(self.total)))
         filled_length = int(self.length * self.iteration // self.total)
         bar = '█' * filled_length + '-' * (self.length - filled_length) \
             if filled_length <= self.length else '█' * self.length
@@ -91,16 +91,28 @@ def calc_measures(classifier, data_set, target):
     :return: 4 accurate measures
     """
     from sklearn.model_selection import cross_validate
-    scoring = ['accuracy', 'precision_weighted', 'recall_weighted', 'f1_weighted']
-    result = cross_validate(classifier, data_set, target, scoring=scoring, cv=10)
-    result = [result['test_' + score].mean() for score in scoring]
-    scoring = [score.split('_')[0] for score in scoring]
-    return dict(zip(scoring, result))
+    from joblib import parallel_backend
+    from sklearn.metrics import (
+        make_scorer,
+        precision_score,
+        accuracy_score,
+        recall_score,
+        f1_score
+    )
+    scoring = {
+        'accuracy': make_scorer(accuracy_score),
+        'precision': make_scorer(precision_score, average='weighted', zero_division=0),
+        'recall': make_scorer(recall_score, average='weighted', zero_division=0),
+        'f1': make_scorer(f1_score, average='weighted', zero_division=0)
+    }
+    with parallel_backend('threading', n_jobs=-1):
+        result = cross_validate(classifier, data_set, target, scoring=scoring, cv=10)
+    return {score: result[f'test_{score}'].mean() for score in scoring}
 
 
 def sort_range_strings(lst: list):
     """
-    Score function - sorted the given list by the value of the range numbers
+    Helper function - sorted the given list by the value of the range numbers
     :param lst: the list of range values
     """
     lst.sort()

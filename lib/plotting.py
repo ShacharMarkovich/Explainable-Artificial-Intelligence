@@ -1,6 +1,6 @@
 from typing import Union, Callable
 import pandas as pd
-from utils import sort_range_strings
+from lib import sort_range_strings
 from math import ceil, sqrt
 import numpy as np
 from sklearn.inspection import plot_partial_dependence, partial_dependence
@@ -165,7 +165,7 @@ def plot_feature_importance(x, y, score_func=None, classifier=None):
     :param classifier: a classifier function
 
     """
-    from feature_selection import __select_k_best
+    from lib.feature_selection import __select_k_best
     # get the score and name of each feature, according to the classifier and/or score function:
     if classifier is not None:  # features' value are numeric
         names, scores = __select_k_best(x, y, classifier=classifier, score=True)

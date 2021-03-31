@@ -7,21 +7,29 @@ SHOULD BE PRIVATE (starts with '__'), OR SHOULD BE DECLARED INSIDE ANOTHER FUNCT
 """
 
 
+# TODO:
+#   1. implement more efficient way for "slope rank" (and test)
+#   2. implement slope rank with normalization
+#   3. implement another slope rank with a different classifier (optional)
+#   4. RUN
+
+
 def slope_rank(x, y, k='all', score=False):
     from sklearn.ensemble import RandomForestClassifier
-    clf = RandomForestClassifier(n_estimators=100)
-    clf.fit(x, y)
+    clf = RandomForestClassifier(n_estimators=100).fit(x, y)
     return __slope_rank(clf, x, k, score)
 
 
 def info_gain(x, y, k='all', score=False):
-    from sklearn.feature_selection import mutual_info_classif
-    return __select_k_best(x, y, mutual_info_classif, k, score=score)
+    from sklearn.tree import DecisionTreeClassifier
+    clf = DecisionTreeClassifier(criterion='entropy')
+    return __select_k_best(x, y, classifier=clf, k=k, score=score)
 
 
 def chi2(x, y, k='all', score=False):
     from sklearn.feature_selection import chi2 as chisq
-    return __select_k_best(x, y, chisq, k, score=score)
+    from sklearn.feature_selection import chi2
+    return __select_k_best(x, y, score_func=chisq, k=k, score=score)
 
 
 def gini(x, y, k='all', score=False):
@@ -33,11 +41,10 @@ def gini(x, y, k='all', score=False):
 def random_forest(x, y, k='all', score=False):
     from sklearn.ensemble import RandomForestClassifier
     clf = RandomForestClassifier(n_estimators=100)
-    clf.fit(x, y)
     return __select_k_best(x, y, classifier=clf, k=k, score=score)
 
 
-def __select_k_best(x, y, score_func=None, k='all',
+def __select_k_best(x, y, *, score_func=None, k='all',
                     classifier=None, score=False):
     """
     select the `k` best features, using a classifier object or score function.
@@ -90,7 +97,33 @@ def __select_k_best(x, y, score_func=None, k='all',
         return names
 
 
-def __slope_rank(classifier, given_x, k='all', score=False, normalized=False):
+def __score(clf, x, feature):
+    from sklearn.inspection import partial_dependence
+    import numpy as np
+
+    try:
+        y, x = partial_dependence(clf, x, feature)
+    except ValueError:
+        # in the case that the slope is too flat - it solve it
+        # y, x = partial_dependence(classifier, given_x, feature, percentiles=(0, 1))
+        return 0
+    else:
+        # calc tha slope and add it to the scores
+        # if x is None or y is None:
+        #     return 0
+        x, y = x[0], y[0]
+        line = np.polyfit(x, y, 1)
+        return abs(line[0])
+
+
+def __work(group, score):
+    from joblib import parallel_backend
+    with parallel_backend('threading', n_jobs=-1):
+        ret = {feature: score(feature=feature) for feature in group}
+    return ret
+
+
+def __slope_rank(classifier, given_x, k='all', score=False, n_jobs=4,normalized=False):
     """
     select and return the `k` best features, according to the slop rank
     :param classifier: a classifier function
@@ -100,7 +133,8 @@ def __slope_rank(classifier, given_x, k='all', score=False, normalized=False):
     :param score: flag, indicate if to return the score of each value
     :return:
     """
-    from sklearn.inspection import partial_dependence
+    from multiprocessing import Pool
+    from functools import partial
     import numpy as np
 
     if normalized:
@@ -108,22 +142,17 @@ def __slope_rank(classifier, given_x, k='all', score=False, normalized=False):
 
     scores = []
     features = list(given_x)
-    for feature in features:
-        x, y = None, None
-        try:
-            y, x = partial_dependence(classifier, given_x, feature)
-        except ValueError:
-            # in the case that the slope is too flat - it solve it
-            y, x = partial_dependence(classifier, given_x, feature, percentiles=(0, 1))
-        finally:
-            # calc tha slope and add it to the scores
-            if x is None or y is None:
-                scores.append(0)
-                continue
-            x, y = x[0], y[0]
-            line = np.polyfit(x, y, 1)
-            scores.append(abs(line[0]))
-    names = list(given_x)
+    s = partial(__score, clf=classifier, x=given_x)
+    with Pool(n_jobs) as p:
+        a = [(map(str, chunk), s) for chunk in np.array_split(features, n_jobs)]
+        results = p.starmap(__work, a)
+
+    result = {}
+    for r in results:
+        result = {**result, **r}
+
+    names, scores = zip(*result.items())
+
     if k != 'all':
         # if user didn't select all of them - select the `k` best of them:
         ind = np.argpartition(scores, -k)[-k:]

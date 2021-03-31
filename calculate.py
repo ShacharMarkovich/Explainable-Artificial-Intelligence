@@ -3,11 +3,10 @@ import sys
 import argparse
 import numpy as np
 import pandas as pd
-from utils import get_data, ProgressBar
+from lib import get_data, ProgressBar
 
 files = []
 score_funcs = []
-sfunc = None
 brute = False
 summery = pd.DataFrame()
 
@@ -31,14 +30,13 @@ def parse_flags():
                                                                 'module. Signature: '
                                                                 'def <name>(X: DataFrame, y:Series, k: Union[int, str]'
                                                                 ', score: bool) ->  Tuple[list, list]')
-    parser.add_argument('-a', '--add', action='store_true', help='Use this flag without "--files" flag '
-                                                                 'to calculate for all files in "numeric_db" '
-                                                                 'that were not calculated, or with "--files" to force '
+    parser.add_argument('-a', '--add', action='store_true', help='Use this flag with "--files" flag '
+                                                                 'to calculate for all files in "numeric_db" that'
+                                                                 ' were not calculated, or without "--files" to force '
                                                                  'recalculation of a calculated file (empty flag means '
                                                                  'the whole "calculated" directory). NOT RECOMMENDED.')
     args = parser.parse_args()
     get_files(args.files, args.add)
-    # get_files([], True)
     get_score_funcs(args.score_funcs)
     if not files or not score_funcs:
         if not files:
@@ -56,9 +54,8 @@ def get_files(input_files, add):
     if input_files:
         summery['files'] = input_files
         for file in input_files:
-            if file[-4:] != '.csv':
-                print(f'{file} is not a CSV file.')
-                continue
+            if not file.endswith('.csv'):
+                file = file + '.csv'
             if not os.path.exists(f'numeric_db/{file}'):
                 print(f'{file} was not found in "numeric_db" directory')
                 continue
@@ -74,16 +71,17 @@ def get_files(input_files, add):
 
 def get_score_funcs(input_funcs):
     global score_funcs
+    from lib import feature_selection
+
     if not input_funcs:
-        import feature_selection
-        input_funcs = [func for func in dir(feature_selection) if func[:2] != '__']
+        input_funcs = [func for func in dir(feature_selection) if not func.startswith('__')]
 
     for func in input_funcs:
         summery[func] = Status.NONE
         try:
-            exec(f'from feature_selection import {func} as sfunc', globals())
+            sfunc = getattr(feature_selection, func)
             score_funcs.append(sfunc)
-        except ImportError:
+        except AttributeError:
             print(f'{func} was not found in "feature_selection" module.')
         except Exception as e:
             print(f'Unknown error importing {func}: {str(e)}')
