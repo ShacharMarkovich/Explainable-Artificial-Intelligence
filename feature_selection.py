@@ -90,10 +90,9 @@ def __select_k_best(x, y, score_func=None, k='all',
         return names
 
 
-def __slope_rank(classifier, given_x, k='all', score=False):
+def __slope_rank(classifier, given_x, k='all', score=False, normalized=False):
     """
     select and return the `k` best features, according to the slop rank
-
     :param classifier: a classifier function
     :param given_x: the input data (names and values)
     :type given_x: pandas.core.frame.DataFrame
@@ -103,6 +102,10 @@ def __slope_rank(classifier, given_x, k='all', score=False):
     """
     from sklearn.inspection import partial_dependence
     import numpy as np
+
+    if normalized:
+        given_x = preprocessing.StandardScaler().fit_transform(given_x)
+
     scores = []
     features = list(given_x)
     for feature in features:
