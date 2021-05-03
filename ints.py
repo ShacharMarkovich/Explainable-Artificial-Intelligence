@@ -1,6 +1,4 @@
-import argparse
 import os
-
 import pandas as pd
 from pandas.core.groupby.generic import SeriesGroupBy
 from sklearn.ensemble import RandomForestClassifier

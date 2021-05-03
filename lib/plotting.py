@@ -63,6 +63,36 @@ def pdp(classifier, given_x, features: list, slope=True, fig_name: str = "fig", 
         plt.show()
 
 
+def pdp2(classifier, given_x, features: list, slope=True, fig_name: str = "fig", mode=None):
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    fig.suptitle(fig_name, fontsize=16)
+    # check multiclass ???
+    res = plot_partial_dependence(classifier, given_x, features, ax=ax)
+
+    if slope:
+        i = 0
+        for axs in res.axes_:
+            for ax_ in axs:
+                if ax_:
+                    x = res.pd_results[i]['values'][0]
+                    y = res.pd_results[i]['average'][0]
+
+                    the_slope, intercept = np.polyfit(x, y, 1)
+                    slx = np.linspace(min(x), max(x))
+                    sly = the_slope * slx + intercept
+
+                    ax_.plot(slx, sly, color='orange')
+                    ax_.title.set_text(f'slope = {the_slope:.4f}')
+                i += 1
+
+    if mode:
+        if 'save' in mode:
+            fig.savefig(f"{fig_name}.png", dpi=300)
+        if 'show' in mode:
+            plt.show()
+
+
 def __plot_bar_chart(x, y, feature: Union[int, str], axis=None,
                      legend=True, show_rate=True, show_y_values=True,
                      sort_cat: Callable[[list], None] = None):

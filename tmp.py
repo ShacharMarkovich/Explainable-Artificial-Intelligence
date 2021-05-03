@@ -1,17 +1,18 @@
 # Run here whatever
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 from sklearn.inspection import plot_partial_dependence, partial_dependence
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 from lib import pdp, get_data
+from lib.plotting import pdp2
 
-X, Y = get_data('numeric_db/semeion.csv')
+X, Y = get_data('numeric_db/spam.csv')
 clf = RandomForestClassifier(n_estimators=100)
 clf.fit(X, Y)
-
-r = plot_partial_dependence(clf, X, ['V162', 'V178'], target=3)
-print(r.pd_results[0])
+# ['V162', 'V178']
+r = pdp2(clf, X, ['char_freq_$', 'word_freq_make', 'word_freq_address', 'word_freq_all'])
 
 plt.show()
 
@@ -24,6 +25,3 @@ plt.show()
 # check that target is being consider for multiclass
 # plot multiclass
 # create intervals for slope to deal with "dips"
-
-
-
