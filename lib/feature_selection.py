@@ -7,17 +7,44 @@ SHOULD BE PRIVATE (starts with '__'), OR SHOULD BE DECLARED INSIDE ANOTHER FUNCT
 """
 
 
-# TODO:
-#   1. implement more efficient way for "slope rank" (and test)
-#   2. implement slope rank with normalization
-#   3. implement another slope rank with a different classifier (optional)
-#   4. RUN
-
-
 def slope_rank(x, y, k='all', score=False):
     from sklearn.ensemble import RandomForestClassifier
-    clf = RandomForestClassifier(n_estimators=100).fit(x, y)
-    return __slope_rank(clf, x, k, score)
+    clf = RandomForestClassifier(n_estimators=100)
+    return __slope_rank(clf, x, y, k, score)
+
+
+def slope_rank_std(x, y, k='all', score=False):
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import StandardScaler
+    clf = RandomForestClassifier(n_estimators=100)
+    return __slope_rank(clf, x, y, k, score, normalize=StandardScaler())
+
+
+def slope_rank_minmax(x, y, k='all', score=False):
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import MinMaxScaler
+    clf = RandomForestClassifier(n_estimators=100)
+    return __slope_rank(clf, x, y, k, score, normalize=MinMaxScaler())
+
+
+def slope_rank_gb(x, y, k='all', score=False):
+    from sklearn.ensemble import GradientBoostingClassifier
+    clf = GradientBoostingClassifier()
+    return __slope_rank(clf, x, y, k, score)
+
+
+def slope_rank_gb_std(x, y, k='all', score=False):
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.preprocessing import StandardScaler
+    clf = GradientBoostingClassifier()
+    return __slope_rank(clf, x, y, k, score, normalize=StandardScaler())
+
+
+def slope_rank_gb_minmax(x, y, k='all', score=False):
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.preprocessing import MinMaxScaler
+    clf = GradientBoostingClassifier()
+    return __slope_rank(clf, x, y, k, score, normalize=MinMaxScaler())
 
 
 def info_gain(x, y, k='all', score=False):
@@ -28,7 +55,6 @@ def info_gain(x, y, k='all', score=False):
 
 def chi2(x, y, k='all', score=False):
     from sklearn.feature_selection import chi2 as chisq
-    from sklearn.feature_selection import chi2
     return __select_k_best(x, y, score_func=chisq, k=k, score=score)
 
 
@@ -100,6 +126,8 @@ def __select_k_best(x, y, *, score_func=None, k='all',
 def __score(clf, x, feature):
     from sklearn.inspection import partial_dependence
     import numpy as np
+    import warnings
+    warnings.filterwarnings('ignore')
 
     try:
         y, x = partial_dependence(clf, x, feature)
@@ -123,7 +151,8 @@ def __work(group, score):
     return ret
 
 
-def __slope_rank(classifier, given_x, k='all', score=False, n_jobs=4,normalized=False):
+def __slope_rank(classifier, given_x, y, k='all', score=False,
+                 n_jobs=4, normalize=None):
     """
     select and return the `k` best features, according to the slop rank
     :param classifier: a classifier function
@@ -131,17 +160,19 @@ def __slope_rank(classifier, given_x, k='all', score=False, n_jobs=4,normalized=
     :type given_x: pandas.core.frame.DataFrame
     :param k: amount of features to select. `all` means - select all features
     :param score: flag, indicate if to return the score of each value
+    :type score: bool
     :return:
     """
     from multiprocessing import Pool
     from functools import partial
+    import pandas as pd
     import numpy as np
 
-    if normalized:
-        given_x = preprocessing.StandardScaler().fit_transform(given_x)
-
-    scores = []
     features = list(given_x)
+    if normalize:
+        given_x = pd.DataFrame(normalize.fit_transform(given_x), columns=features)
+    classifier.fit(given_x, y)
+
     s = partial(__score, clf=classifier, x=given_x)
     with Pool(n_jobs) as p:
         a = [(map(str, chunk), s) for chunk in np.array_split(features, n_jobs)]

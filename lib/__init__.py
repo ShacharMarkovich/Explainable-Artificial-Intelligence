@@ -2,7 +2,9 @@ from lib.utils import (
     ProgressBar,
     get_data,
     calc_measures,
-    sort_range_strings
+    sort_range_strings,
+    k_best,
+    intersection
 )
 from lib.plotting import (
     pdp,

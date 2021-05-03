@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.inspection import plot_partial_dependence, partial_dependence
 
 
-def pdp(classifier, given_x, features: list, slope=True, fig_name: str = ""):
+def pdp(classifier, given_x, features: list, slope=True, fig_name: str = "fig", mode=''):
     """
     Show the pdp plot and calculate the slope of each variable
 
@@ -16,6 +16,7 @@ def pdp(classifier, given_x, features: list, slope=True, fig_name: str = ""):
     :type given_x: pandas.core.frame.DataFrame
     :param features: list of features
     :param slope: flag, indicate if we want to get the slope of each variable
+    :param mode
     """
     if not slope:
         plot_partial_dependence(classifier, given_x, features)
@@ -56,7 +57,10 @@ def pdp(classifier, given_x, features: list, slope=True, fig_name: str = ""):
     for i in range(len(features) - 1):
         subplot(i + 1, ax1)
 
-    fig.savefig(f"{fig_name}.png", dpi=300)
+    if 'save' in mode:
+        fig.savefig(f"{fig_name}.png", dpi=300)
+    if 'show' in mode:
+        plt.show()
 
 
 def __plot_bar_chart(x, y, feature: Union[int, str], axis=None,

@@ -1,26 +1,29 @@
 # Run here whatever
-
-import warnings
 from sklearn.ensemble import RandomForestClassifier
-from lib.feature_selection import __slope_rank
-from multiprocessing import Pool, freeze_support
-import time
-# from sklearn.preprocessing import StandardScaler
-# from sklearn.preprocessing import MinMaxScaler
-from lib import get_data
+import pandas as pd
+from sklearn.inspection import plot_partial_dependence, partial_dependence
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+from lib import pdp, get_data
 
-warnings.filterwarnings('ignore')
-x, y = get_data('numeric_db/spam.csv')
-fs = list(x)
-clf = RandomForestClassifier(n_estimators=100).fit(x, y)
+X, Y = get_data('numeric_db/semeion.csv')
+clf = RandomForestClassifier(n_estimators=100)
+clf.fit(X, Y)
+
+r = plot_partial_dependence(clf, X, ['V162', 'V178'], target=3)
+print(r.pd_results[0])
+
+plt.show()
+
+# print(r)
+# scaled_x = pd.DataFrame(MinMaxScaler().fit_transform(X), columns=list(X))
+# scaled_clf = RandomForestClassifier(n_estimators=100).fit(scaled_x, Y)
+#
+# pdp(clf, X, ['V162', 'V178'], mode='show')
+# Multiclass -- average of absolute values of different slopes
+# check that target is being consider for multiclass
+# plot multiclass
+# create intervals for slope to deal with "dips"
 
 
-if __name__ == '__main__':
-    pass
-    # func()
-    s = time.time()
-    res = __slope_rank(clf, x, score=True)
-    print(f'time: {time.time() - s} sec')
-    print(res)
-    # 87.90728330612183
-    # best result - 4 processes, 4 chunks + parallel_backend
+

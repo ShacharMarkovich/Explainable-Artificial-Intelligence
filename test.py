@@ -2,7 +2,7 @@ import os
 import argparse
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from lib.utils import ProgressBar, get_data, calc_measures
+from lib import ProgressBar, get_data, calc_measures, k_best, intersection
 
 files = os.listdir('calculated')
 ks = {7}
@@ -67,13 +67,6 @@ def parse():
 
 
 # region Helper Functions
-def k_best(df, rank, k):
-    return df.sort_values(rank, ascending=False)['feature'][:k].to_list()
-
-
-def intersection(lst1, lst2):
-    return list(set(lst1) & set(lst2))
-
 
 def set_bar():
     global bar

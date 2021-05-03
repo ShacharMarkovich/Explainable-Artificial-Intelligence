@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import pandas as pd
 
 
@@ -70,7 +72,15 @@ class ProgressBar:
             self._warned = True
 
 
-def get_data(file, drop=None):
+def k_best(df, rank, k):
+    return df.sort_values(rank, ascending=False)['feature'][:k].to_list()
+
+
+def intersection(lst1, lst2):
+    return list(set(lst1) & set(lst2))
+
+
+def get_data(file, drop=None) -> Tuple[pd.DataFrame, pd.Series]:
     drop = drop or []
     data = pd.read_csv(file)
     data.rename(columns={'Class': 'class'}, inplace=True)
