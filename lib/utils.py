@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 
 import pandas as pd
 
@@ -80,7 +80,14 @@ def intersection(lst1, lst2):
     return list(set(lst1) & set(lst2))
 
 
-def get_data(file, drop=None) -> Tuple[pd.DataFrame, pd.Series]:
+def get_data(file: str, drop: List[str] = None) -> Tuple[pd.DataFrame, pd.Series]:
+    """
+    read data from csv file.
+
+    :param file: the file name
+    :param drop: optional column name list to drop
+    :return: tuple of attributes and their values, and the class column
+    """
     drop = drop or []
     data = pd.read_csv(file)
     data.rename(columns={'Class': 'class'}, inplace=True)
