@@ -12,7 +12,7 @@ tested: SeriesGroupBy = None
 def calc_intersections_measures(file: str) -> pd.DataFrame:
     """
     For a given file, return a DataFrame which contains the
-    MinMax slop_rank with the other ranks (who not kind of slope_rank) features intersections' measures calculation,
+    MinMax slop_rank with the other ranks (who's not kind of slope_rank) features intersections' measures calculation,
     and for the other ranks, calc the measures and add it to the DataFrame too.
 
     :param file: the input file name

@@ -1,12 +1,70 @@
-from typing import Union, Callable
-import pandas as pd
-from lib import sort_range_strings
-from math import ceil, sqrt
 import numpy as np
+import pandas as pd
+from math import ceil, sqrt
+import matplotlib.pyplot as plt
+from lib import sort_range_strings
+from typing import Union, Callable
 from sklearn.inspection import plot_partial_dependence, partial_dependence
 
 
-def pdp(classifier, given_x, features: list, slope=True, fig_name: str = "fig", mode=''):
+class InteractivePlots:
+    def __init__(self, fig):
+        if not fig or not fig.axes:
+            return
+
+        self.fig = fig
+        hn, lb = fig.axes[0].get_legend_handles_labels()
+        leg = fig.legend(hn, lb, 'center right', fontsize=18)
+
+        lines = zip(*[ax.get_lines() for ax in fig.axes])
+        self.lined = {}
+        for legline, origlines in zip(leg.get_lines(), lines):
+            legline.set_picker(True)  # Enable picking on the legend line.
+            legline.set_pickradius(15)
+            for origline in origlines:
+                origline.set_picker(True)  # Enable picking on the plot line.
+                origline.set_pickradius(10)
+            self.lined[legline] = origlines
+
+        self.fig.canvas.mpl_connect('pick_event', self.on_pick)
+        self.fig.canvas.mpl_connect('button_press_event', self.on_click)
+
+    def on_pick(self, event):
+        self.__update(line=event.artist)
+
+    def on_click(self, event):
+        if event.button == 3:
+            visible = False
+        elif event.button == 2:
+            visible = True
+        else:
+            return
+
+        self.__update(value=visible)
+
+    def __update(self, *, line=None, value=None):
+        if not line and value is None:
+            return
+
+        if not line or line in self.lined:  # general click or click on legend
+            cur_lines = self.lined if not line else {line: self.lined[line]}
+            visible = line.get_alpha() != 1 if value is None else value
+
+            for ll, ols in cur_lines.items():
+                ll.set_alpha(1.0 if visible else 0.2)
+                for ol in ols:
+                    ol.set_visible(visible)
+
+        else:  # click on plotted line
+            legline, origlines = next(filter(lambda item: line in item[1], self.lined.items()))
+            visible = value if value is not None else not line.get_visible()
+            line.set_visible(visible)
+            if all(ol.get_visible() == visible for ol in origlines):
+                legline.set_alpha(1.0 if visible else 0.2)
+        self.fig.canvas.draw()
+
+
+def pdp(classifier, given_x, features: list, slope=None, interactive=None, fig_name: str = "fig", mode=None):
     """
     Show the pdp plot and calculate the slope of each variable
 
@@ -17,80 +75,45 @@ def pdp(classifier, given_x, features: list, slope=True, fig_name: str = "fig", 
     :param features: list of features
     :param slope: flag, indicate if we want to get the slope of each variable
     :param mode
+    :param interactive
     """
-    if not slope:
-        plot_partial_dependence(classifier, given_x, features)
-        return  # if we don't need to calc the slope - no need for this function anymore!
+    # TODO: Add option for a Normalizer (after 'core')
+    multi = len(classifier.classes_) > 2
+    slope = slope if slope is not None else not multi
+    interactive = interactive if interactive is not None else multi
 
-    # create new figure
-    import matplotlib.pyplot as plt
     fig = plt.figure()
     fig.suptitle(fig_name, fontsize=16)
     subplots_num = len(features)
     cols = ceil(sqrt(subplots_num))
-    rows = subplots_num // cols + int(bool(subplots_num % cols))
+    d, r = divmod(subplots_num, cols)
+    rows = d + int(bool(r))
 
-    def subplot(index, sharey=None):
-        """
-        Calculate the slop of each variable and show it in different subplot
+    for i, feature in enumerate(features):
+        ax = fig.add_subplot(rows, cols, i + 1, title=feature)
+        ys, x = partial_dependence(classifier, given_x, feature, grid_resolution=125)  # kind='average' to get a Bunch
+        x = x[0]
+        for y, cls in zip(ys, classifier.classes_):
+            label = cls if multi else 'pdp'
+            ax.plot(x, y, label=label)
 
-        :param index: feature's index
-        :type index: int
-        :param sharey: the value to show in the shared Y axis
-        :return: a new subplot
-        """
-        ax = fig.add_subplot(rows, cols, index + 1, sharey=sharey)
-        y, x = partial_dependence(classifier, given_x, features[index])
-        x, y = x[0], y[0]
-        # noinspection PyTupleAssignmentBalance
-        the_slope, intercept = np.polyfit(x, y, 1)
-        ax.title.set_text(features[index] + (', slope = %.4f' % the_slope))
-        ax.plot(x, y)
-        slx = np.linspace(min(x), max(x))
-        sly = the_slope * slx + intercept
-        ax.plot(slx, sly)
-        ax.plot(x, y)
-        return ax
+            if slope:
+                the_slope, intercept = np.polyfit(x, y, 1)
+                if not multi:
+                    ax.text(0.01, 0.01, f'slope = {the_slope:.4f}', fontsize=12, transform=ax.transAxes)
 
-    # calculate each subplot. All shared the Y axis values:
-    ax1 = subplot(0)
-    for i in range(len(features) - 1):
-        subplot(i + 1, ax1)
+                slx = np.linspace(min(x), max(x))
+                sly = the_slope * slx + intercept
+                ax.plot(slx, sly, label='slope')
 
-    if 'save' in mode:
-        fig.savefig(f"{fig_name}.png", dpi=300)
-    if 'show' in mode:
-        plt.show()
-
-
-def pdp2(classifier, given_x, features: list, slope=True, fig_name: str = "fig", mode=None):
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    fig.suptitle(fig_name, fontsize=16)
-    # check multiclass ???
-    res = plot_partial_dependence(classifier, given_x, features, ax=ax)
-
-    if slope:
-        i = 0
-        for axs in res.axes_:
-            for ax_ in axs:
-                if ax_:
-                    x = res.pd_results[i]['values'][0]
-                    y = res.pd_results[i]['average'][0]
-
-                    the_slope, intercept = np.polyfit(x, y, 1)
-                    slx = np.linspace(min(x), max(x))
-                    sly = the_slope * slx + intercept
-
-                    ax_.plot(slx, sly, color='orange')
-                    ax_.title.set_text(f'slope = {the_slope:.4f}')
-                i += 1
+    ret = fig if not interactive else InteractivePlots(fig)
 
     if mode:
         if 'save' in mode:
             fig.savefig(f"{fig_name}.png", dpi=300)
         if 'show' in mode:
             plt.show()
+    return ret
 
 
 def __plot_bar_chart(x, y, feature: Union[int, str], axis=None,
@@ -172,7 +195,6 @@ def plot_bar_chart(x, y, features: Union[int, str, list],
         return
 
     # create new figure with enough space for all bar chart:
-    import matplotlib.pyplot as plt
     fig = plt.figure()
     subplots_num = len(features)
     cols = ceil(sqrt(subplots_num))

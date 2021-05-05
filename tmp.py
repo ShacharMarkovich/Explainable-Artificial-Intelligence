@@ -1,27 +1,30 @@
 # Run here whatever
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-import pandas as pd
-from sklearn.inspection import plot_partial_dependence, partial_dependence
-from sklearn.preprocessing import MinMaxScaler
-import matplotlib.pyplot as plt
-from lib import pdp, get_data
-from lib.plotting import pdp2
 
-X, Y = get_data('numeric_db/spam.csv')
-clf = RandomForestClassifier(n_estimators=100)
-clf.fit(X, Y)
-# ['V162', 'V178']
-r = pdp2(clf, X, ['char_freq_$', 'word_freq_make', 'word_freq_address', 'word_freq_all'])
+from lib import get_data
+from lib.plotting import pdp
 
-plt.show()
 
-# print(r)
-# scaled_x = pd.DataFrame(MinMaxScaler().fit_transform(X), columns=list(X))
-# scaled_clf = RandomForestClassifier(n_estimators=100).fit(scaled_x, Y)
-#
-# pdp(clf, X, ['V162', 'V178'], mode='show')
-# Multiclass -- average of absolute values of different slopes
-# check that target is being consider for multiclass
-# plot multiclass
-# create intervals for slope to deal with "dips"
+# TODO
+#   check that target is being consider for multiclass    V
+#   plot multiclass                                       V
+#   plot normalized data                                  X
+#   organize - make a 'core' file with declaration of:    V
+#     Classifier (with a base classifier and normalizer)  X (possibly handle categorical data with encoder)
+#     function for pdp + slope                            X
+#   score by average of absolute values of all slopes     X
+#   create intervals for slope to deal with "dips"        X
+
+
+def main():
+    X, Y = get_data('numeric_db/urbanLandCover.csv')
+    clf = RandomForestClassifier(n_estimators=100)
+    clf.fit(X, Y)
+    print(clf.classes_)
+    # ['V162', 'V75', 'V250', 'V16']['word_freq_make']
+
+    r = pdp(clf, X, ['BrdIndx', 'Area', 'Round', 'Bright'], mode='show', )
+
+
+if __name__ == '__main__':
+    main()
